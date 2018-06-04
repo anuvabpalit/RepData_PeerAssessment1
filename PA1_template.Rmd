@@ -1,25 +1,126 @@
----
-title: "Reproducible Research: Peer Assessment 1"
+
+# "Reproducible Research: Peer Assessment 1"
 output: 
   html_document:
     keep_md: true
----
 
 
 ## Loading and preprocessing the data
+### Loading the Data
 
+```{r}
+library(ggplot2)
+library(plyr)
+if(!file.exists('activity.csv')){
+  unzip('activity.zip')
+}
+```
+###Data Processing Step
+```{r}
+activity <- read.csv("activity.csv")
+activity$day <- weekdays(as.Date(activity$date))
+activity$DateTime<- as.POSIXct(activity$date, format="%Y-%m-%d")
+clean <- activity[!is.na(activity$steps),]
+```
 
 
 ## What is mean total number of steps taken per day?
+
+```{r}
+sumTable <- aggregate(activity$steps ~ activity$date, FUN=sum, )
+colnames(sumTable)<- c("Date", "Steps")
+
+
+### making a histogram for number of steps taken on daily basis
+
+hist(sumTable$Steps, breaks= 50, xlab="Steps", main = "Total Steps per Day", col = "orange")
+
+### Steps' Mean
+as.integer(mean(sumTable$Steps))
+### Steps' Median
+as.integer(median(sumTable$Steps))
+```
+### The Mean for number of steps taken per day is 10766
+### The Median for number of steps taken per day is 10765
+
 
 
 
 ## What is the average daily activity pattern?
 
+```{r}
+clean <- activity[!is.na(activity$steps),]
+intervalTable <- ddply(clean, .(interval), summarize, Avg = mean(steps))
+
+### Lineplot creation
+
+p <- ggplot(intervalTable, aes(x=interval, y=Avg), xlab = "Interval", ylab="Average Number of Steps")
+p + geom_line()+xlab("Interval")+ylab("Average Number of Steps")+ggtitle("Average Number of Steps per Interval")
+
+### Intervalwise maximum steps
+
+maxSteps <- max(intervalTable$Avg)
+
+### Interval containing max avg number of steps
+
+intervalTable[intervalTable$Avg==maxSteps,1]
+```
+### The 5-minute interval withe maximum number of steps is the 835th interval.
+
+
+
 
 
 ## Imputing missing values
+```{r}
+
+nrow(activity[is.na(activity$steps),])
+```
+### There are 2304 number of rows where steps has 'NA' value
+
+### I would like to fill the NAs with NAs with the average 5-minute interval value based on the day of the week.
+
+```{r}
+
+### average number of steps per interval and weekday basis
+
+avgTable <- ddply(clean, .(interval, day), summarize, Avg = mean(steps))
+nadata<- activity[is.na(activity$steps),]
+newdata<-merge(nadata, avgTable, by=c("interval", "day"))
+```
+
+### CReating duplicate datasets with filled in missing values
+
+```{r}
+newdata2<- newdata[,c(6,4,1,2,5)]
+colnames(newdata2)<- c("steps", "date", "interval", "day", "DateTime")
+mergeData <- rbind(clean, newdata2)
+sumTable2 <- aggregate(mergeData$steps ~ mergeData$date, FUN=sum, )
+colnames(sumTable2)<- c("Date", "Steps")
+as.integer(mean(sumTable2$Steps))
+as.integer(median(sumTable2$Steps))
+
+### Creating Histogram
+hist(sumTable2$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day with NAs Fixed", col="Red")
+
+hist(sumTable$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day with NAs Fixed", col="Yellow", add=T)
+legend("topright", c("Imputed Data", "Non-NA Data"), fill=c("Red", "yellow") )
+```
+
+### The overall Distribution shape is in unaltered state. However new mean is 10821 compared to 10766 (Old mean) and the new median is 11015 compared to 10765 (Old Median).
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+mergeData$DayCategory <- ifelse(mergeData$day %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+library(lattice) 
+intervalTable2 <- ddply(mergeData, .(interval, DayCategory), summarize, Avg = mean(steps))
+xyplot(Avg~interval|DayCategory, data=intervalTable2, type="l",  layout = c(1,2),
+       main="Average Steps per Interval Based on Type of Day", 
+       ylab="Average Number of Steps", xlab="Interval")
+```
+
+
+### From the plot we can clearly see that there is a difference in activities of people between weekdays and weekends.
